@@ -13,12 +13,12 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
       - name: Siapin file .env
         run: cp .env.example .env || echo "no env example"
-      - name: Kasih izin gradlew
-        run: chmod +x gradlew
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
       - name: Simpan APK-nya
         uses: actions/upload-artifact@v4
         with:
