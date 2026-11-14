@@ -27,8 +27,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Login
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,10 +40,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,6 +65,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -94,12 +103,17 @@ fun AuthScreen(
   var isLoading by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
 
+  var email by remember { mutableStateOf("") }
+  var password by remember { mutableStateOf("") }
+  var passwordVisible by remember { mutableStateOf(false) }
+  var isRegisterMode by remember { mutableStateOf(false) }
+
   LaunchedEffect(Unit) {
     attemptAutoSignIn(
       context = context,
       credentialManager = credentialManager,
       onAuthSuccess = onAuthSuccess,
-      onUnauthenticated = { /* Interactive Google Sign-In button stays ready */ },
+      onUnauthenticated = { },
       scope = scope
     )
   }
@@ -190,60 +204,50 @@ fun AuthScreen(
           ) {
             Column(modifier = Modifier.padding(18.dp)) {
               Text(
-                text = "Masuk Portal PAMSIMAS",
+                text = if (isRegisterMode) "Daftar Akun Baru" else "Masuk Portal PAMSIMAS",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
               )
               Spacer(modifier = Modifier.height(4.dp))
               Text(
-                text = "Gunakan akun Google Anda. Sistem otomatis mengenali akses Admin atau Pelanggan Dusun Weru.",
+                text = "Masuk dengan Email & Password, atau gunakan akun Google Anda.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
 
               Spacer(modifier = Modifier.height(14.dp))
 
-              RoleAccessInfoTile(
-                icon = Icons.Rounded.AdminPanelSettings,
-                title = "Akses Admin (Pengelola)",
-                desc = "Kelola pelanggan tanpa batas, catat meteran, tagihan otomatis, pembayaran tunai/transfer, laporan & kuitansi.",
-                containerColor = WaterBlueContainer,
-                iconTint = WaterBlueOnContainer
+              // === EMAIL ===
+              OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                leadingIcon = { Icon(Icons.Rounded.Email, null) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag("email_field"),
+                shape = RoundedCornerShape(12.dp)
               )
               Spacer(modifier = Modifier.height(10.dp))
-              RoleAccessInfoTile(
-                icon = Icons.Rounded.Person,
-                title = "Akses Pelanggan",
-                desc = "Lihat profil sambungan, riwayat meteran, rincian tagihan, riwayat pembayaran & kirim bukti transfer.",
-                containerColor = LeafGreenContainer,
-                iconTint = LeafGreenOnContainer
+
+              // === PASSWORD ===
+              OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                leadingIcon = { Icon(Icons.Rounded.Lock, null) },
+                trailingIcon = {
+                  IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                      if (passwordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                      null
+                    )
+                  }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag("password_field"),
+                shape = RoundedCornerShape(12.dp)
               )
-
-              Spacer(modifier = Modifier.height(14.dp))
-
-              Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Row(
-                  modifier = Modifier.padding(12.dp),
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  Icon(
-                    imageVector = Icons.Rounded.WaterDrop,
-                    contentDescription = null,
-                    tint = WaterBluePrimary,
-                    modifier = Modifier.size(20.dp)
-                  )
-                  Spacer(modifier = Modifier.width(8.dp))
-                  Text(
-                    text = "Tarif Rp2.000/m³ • Tambahan beban Rp5.000/bulan jika pemakaian < 8 m³",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                  )
-                }
-              }
 
               if (errorMessage != null) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -261,8 +265,73 @@ fun AuthScreen(
                 }
               }
 
-              Spacer(modifier = Modifier.height(16.dp))
+              Spacer(modifier = Modifier.height(14.dp))
 
+              // === TOMBOL LOGIN / DAFTAR EMAIL ===
+              Button(
+                onClick = {
+                  errorMessage = null
+                  if (email.isBlank() || password.isBlank()) {
+                    errorMessage = "Email dan password wajib diisi."
+                    return@Button
+                  }
+                  if (password.length < 6) {
+                    errorMessage = "Password minimal 6 karakter."
+                    return@Button
+                  }
+                  isLoading = true
+                  scope.launch {
+                    try {
+                      if (isRegisterMode) {
+                        Firebase.auth.createUserWithEmailAndPassword(email.trim(), password).await()
+                      } else {
+                        Firebase.auth.signInWithEmailAndPassword(email.trim(), password).await()
+                      }
+                      isLoading = false
+                      onAuthSuccess()
+                    } catch (e: Exception) {
+                      isLoading = false
+                      errorMessage = when {
+                        e.message?.contains("already in use") == true -> "Email sudah terdaftar, silakan login."
+                        e.message?.contains("invalid-credential") == true -> "Email / password salah."
+                        e.message?.contains("invalid-email") == true -> "Format email tidak valid."
+                        else -> e.localizedMessage ?: "Gagal masuk."
+                      }
+                    }
+                  }
+                },
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = WaterBluePrimary)
+              ) {
+                if (isLoading) {
+                  CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White, strokeWidth = 2.5.dp)
+                  Spacer(modifier = Modifier.width(10.dp))
+                  Text("Memproses...")
+                } else {
+                  Text(if (isRegisterMode) "Daftar" else "Masuk dengan Email")
+                }
+              }
+
+              TextButton(
+                onClick = {
+                  isRegisterMode = !isRegisterMode
+                  errorMessage = null
+                },
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Text(if (isRegisterMode) "Sudah punya akun? Masuk" else "Belum punya akun? Daftar di sini")
+              }
+
+              // === PEMISAH ===
+              Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                Box(modifier = Modifier.weight(1f).height(1.dp).background(Color.Gray.copy(alpha = 0.3f)))
+                Text("  ATAU  ", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Box(modifier = Modifier.weight(1f).height(1.dp).background(Color.Gray.copy(alpha = 0.3f)))
+              }
+
+              // === TOMBOL GOOGLE (TETAP ADA) ===
               Button(
                 onClick = {
                   errorMessage = null
@@ -279,37 +348,48 @@ fun AuthScreen(
                       errorMessage = msg
                     },
                     scope = scope,
-                    onAuthCancelled = {
-                      isLoading = false
-                    }
+                    onAuthCancelled = { isLoading = false }
                   )
                 },
                 enabled = !isLoading,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .height(52.dp)
-                  .testTag("google_sign_in_button"),
+                modifier = Modifier.fillMaxWidth().height(52.dp).testTag("google_sign_in_button"),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = WaterBluePrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
               ) {
-                if (isLoading) {
-                  CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    color = Color.White,
-                    strokeWidth = 2.5.dp
-                  )
-                  Spacer(modifier = Modifier.width(10.dp))
-                  Text("Menghubungkan...")
-                } else {
-                  Icon(
-                    imageVector = Icons.Rounded.Login,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                  )
+                Icon(imageVector = Icons.Rounded.Login, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Masuk dengan Google", style = MaterialTheme.typography.labelLarge, color = Color.Black)
+              }
+
+              Spacer(modifier = Modifier.height(14.dp))
+              RoleAccessInfoTile(
+                icon = Icons.Rounded.AdminPanelSettings,
+                title = "Akses Admin (Pengelola)",
+                desc = "Kelola pelanggan, catat meteran, tagihan otomatis, pembayaran, laporan & kuitansi.",
+                containerColor = WaterBlueContainer,
+                iconTint = WaterBlueOnContainer
+              )
+              Spacer(modifier = Modifier.height(10.dp))
+              RoleAccessInfoTile(
+                icon = Icons.Rounded.Person,
+                title = "Akses Pelanggan",
+                desc = "Lihat profil sambungan, riwayat meteran, tagihan, pembayaran & kirim bukti transfer.",
+                containerColor = LeafGreenContainer,
+                iconTint = LeafGreenOnContainer
+              )
+              Spacer(modifier = Modifier.height(12.dp))
+              Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                  Icon(imageVector = Icons.Rounded.WaterDrop, contentDescription = null, tint = WaterBluePrimary, modifier = Modifier.size(20.dp))
                   Spacer(modifier = Modifier.width(8.dp))
                   Text(
-                    text = "Masuk dengan Google",
-                    style = MaterialTheme.typography.labelLarge
+                    text = "Tarif Rp2.000/m³ • Tambahan beban Rp5.000/bulan jika pemakaian < 8 m³",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                   )
                 }
               }
@@ -317,18 +397,11 @@ fun AuthScreen(
           }
 
           Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Icon(
-              imageVector = Icons.Rounded.CloudDone,
-              contentDescription = null,
-              tint = LeafGreenSecondary,
-              modifier = Modifier.size(16.dp)
-            )
+            Icon(imageVector = Icons.Rounded.CloudDone, contentDescription = null, tint = LeafGreenSecondary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(
               text = "Dukungan Offline & Sinkronisasi Firebase Cloud",
@@ -351,40 +424,20 @@ private fun RoleAccessInfoTile(
   iconTint: Color
 ) {
   Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(12.dp))
-      .background(containerColor.copy(alpha = 0.55f))
-      .padding(12.dp),
+    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(containerColor.copy(alpha = 0.55f)).padding(12.dp),
     verticalAlignment = Alignment.Top
   ) {
     Box(
-      modifier = Modifier
-        .size(34.dp)
-        .clip(CircleShape)
-        .background(containerColor),
+      modifier = Modifier.size(34.dp).clip(CircleShape).background(containerColor),
       contentAlignment = Alignment.Center
     ) {
-      Icon(
-        imageVector = icon,
-        contentDescription = title,
-        tint = iconTint,
-        modifier = Modifier.size(19.dp)
-      )
+      Icon(imageVector = icon, contentDescription = title, tint = iconTint, modifier = Modifier.size(19.dp))
     }
     Spacer(modifier = Modifier.width(10.dp))
     Column(modifier = Modifier.weight(1f)) {
-      Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurface
-      )
+      Text(text = title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
       Spacer(modifier = Modifier.height(2.dp))
-      Text(
-        text = desc,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
+      Text(text = desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
   }
 }
@@ -406,17 +459,12 @@ fun attemptAutoSignIn(
     onUnauthenticated()
     return
   }
-
   val googleIdOption = GetGoogleIdOption.Builder()
     .setFilterByAuthorizedAccounts(true)
     .setServerClientId(clientId)
     .setAutoSelectEnabled(true)
     .build()
-
-  val request = GetCredentialRequest.Builder()
-    .addCredentialOption(googleIdOption)
-    .build()
-
+  val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
   scope.launch {
     try {
       val result = credentialManager.getCredential(context, request)
@@ -449,12 +497,8 @@ fun onGoogleSignInClicked(
     onAuthError("Konfigurasi Google Sign-In tidak ditemukan.")
     return
   }
-
   val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-  val request = GetCredentialRequest.Builder()
-    .addCredentialOption(signInOption)
-    .build()
-
+  val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
   scope.launch {
     try {
       val activity = context as? Activity
@@ -469,7 +513,7 @@ fun onGoogleSignInClicked(
         onAuthError("Tipe kredensial tidak dikenali.")
       }
     } catch (e: GetCredentialCancellationException) {
-      Log.w("Auth", "Google Sign-In cancelled or dismissed: ${e.message}", e)
+      Log.w("Auth", "Google Sign-In cancelled: ${e.message}", e)
       onAuthCancelled()
     } catch (e: Exception) {
       Log.e("Auth", "Google Sign-In failed", e)
