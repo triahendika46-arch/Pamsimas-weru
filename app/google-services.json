@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "580425372550",
+    "project_id": "weru-maju",
+    "storage_bucket": "weru-maju.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:580425372550:android:9d54a01b525ba91f949207",
+        "android_client_info": {
+          "package_name": "com.aistudio.pamsimasweru.hwpxzk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8WyG4takx7JtI-GCAGr4G0FzFWFWgjp8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
