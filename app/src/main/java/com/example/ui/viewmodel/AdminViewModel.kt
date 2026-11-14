@@ -218,8 +218,16 @@ class AdminViewModel(
     viewModelScope.launch {
       _isBusy.value = true
       try {
-        val status = repository.deleteCustomer(customer.id, allowOfflineQueue = true)
-        _feedbackMessage.value = formatWriteFeedback("Pelanggan \"${customer.nama}\" dihapus", status)
+        val status = repository.deleteCustomer(
+          customerId = customer.id,
+          ownerUid = customer.ownerUid,
+          isOnline = isOnline.value,
+          allowOfflineQueue = true
+        )
+        _feedbackMessage.value = formatWriteFeedback(
+          "Pelanggan \"${customer.nama}\" beserta seluruh data meteran, tagihan & pembayarannya langsung dihapus",
+          status
+        )
       } catch (e: Exception) {
         _feedbackMessage.value = "Gagal menghapus pelanggan: ${e.localizedMessage ?: "Terjadi kesalahan"}"
       } finally {

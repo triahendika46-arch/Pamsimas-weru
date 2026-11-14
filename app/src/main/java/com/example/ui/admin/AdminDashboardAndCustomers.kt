@@ -424,6 +424,7 @@ fun AdminCustomersTab(
   var filterMode by remember { mutableStateOf("semua") }
   var showFormDialog by remember { mutableStateOf(false) }
   var editingCustomer by remember { mutableStateOf<Customer?>(null) }
+  var deletingCustomer by remember { mutableStateOf<Customer?>(null) }
 
   val filteredCustomers = remember(customers, searchQuery, filterMode) {
     customers.filter { cust ->
@@ -563,13 +564,26 @@ fun AdminCustomersTab(
                     )
                   }
                 }
-                IconButton(
-                  onClick = {
-                    editingCustomer = cust
-                    showFormDialog = true
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  IconButton(
+                    onClick = {
+                      editingCustomer = cust
+                      showFormDialog = true
+                    },
+                    modifier = Modifier.testTag("edit_customer_${cust.noMeter}")
+                  ) {
+                    Icon(Icons.Rounded.Edit, contentDescription = "Edit pelanggan")
                   }
-                ) {
-                  Icon(Icons.Rounded.Edit, contentDescription = "Edit pelanggan")
+                  IconButton(
+                    onClick = { deletingCustomer = cust },
+                    modifier = Modifier.testTag("delete_customer_${cust.noMeter}")
+                  ) {
+                    Icon(
+                      Icons.Rounded.Delete,
+                      contentDescription = "Hapus pelanggan",
+                      tint = MaterialTheme.colorScheme.error
+                    )
+                  }
                 }
               }
             }
@@ -595,6 +609,36 @@ fun AdminCustomersTab(
       onDelete = { cust ->
         onDeleteCustomer(cust)
         showFormDialog = false
+      }
+    )
+  }
+
+  if (deletingCustomer != null) {
+    val cust = deletingCustomer!!
+    AlertDialog(
+      onDismissRequest = { deletingCustomer = null },
+      title = { Text("Hapus Pelanggan & Semua Data?") },
+      text = {
+        Text(
+          "Menghapus ${cust.nama} (${cust.noMeter}) akan langsung menghilangkan seluruh data pelanggan, riwayat pencatatan meteran, tagihan, bukti transfer, dan kuitansi pembayarannya secara permanen."
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            onDeleteCustomer(cust)
+            deletingCustomer = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+          modifier = Modifier.testTag("confirm_delete_customer_button")
+        ) {
+          Text("Hapus Semua Data")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { deletingCustomer = null }) {
+          Text("Batal")
+        }
       }
     )
   }
@@ -697,14 +741,22 @@ private fun CustomerFormDialog(
               Text("Hapus Pelanggan Ini")
             }
           } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-              Button(
-                onClick = { onDelete(existing) },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-              ) {
-                Text("Konfirmasi Hapus")
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Text(
+                text = "Semua data meteran, tagihan, bukti transfer & kuitansi milik ${existing.nama} akan ikut dihapus permanen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+              )
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                  onClick = { onDelete(existing) },
+                  colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                  modifier = Modifier.testTag("dialog_confirm_delete_customer_button")
+                ) {
+                  Text("Konfirmasi Hapus")
+                }
+                TextButton(onClick = { confirmDelete = false }) { Text("Batal") }
               }
-              TextButton(onClick = { confirmDelete = false }) { Text("Batal") }
             }
           }
         }

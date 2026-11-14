@@ -5,6 +5,7 @@ import com.example.data.model.Bill
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -176,6 +177,97 @@ class PamsimasRepositoryRuleTest : FirestoreEmulatorTestBase() {
     } catch (e: IllegalStateException) {
       assertTrue(e.message!!.contains("Google"))
     }
+  }
+
+  @Test
+  fun admin_deleteCustomer_cascadesAndRemovesAllCustomerData() = runBlocking {
+    val suffix = UUID.randomUUID().toString().take(6)
+    val custEmail = "hapus.$suffix@weru.id"
+    val custUid = signInTestUser(custEmail, markVerified = true)
+    val custRepo = PamsimasRepository(firestore, auth)
+    withTimeout(TIMEOUT_MS) {
+      custRepo.submitCustomerRequest(
+        nama = "Warga Hapus",
+        noMeter = "WR-$suffix",
+        alamat = "Dusun Weru",
+        rtRw = "RT 03 / RW 01",
+        noHp = "081299998888"
+      )
+    }
+    auth.signOut()
+
+    signInTestUser(PamsimasRepository.BOOTSTRAP_ADMIN_EMAIL, markVerified = true)
+    val adminRepo = PamsimasRepository(firestore, auth)
+
+    val (customerId, _) = withTimeout(TIMEOUT_MS) {
+      adminRepo.createCustomer(
+        nama = "Warga Hapus",
+        noMeter = "WR-$suffix",
+        alamat = "Dusun Weru",
+        rtRw = "RT 03 / RW 01",
+        noHp = "081299998888",
+        emailPelanggan = custEmail,
+        ownerUid = custUid,
+        meterAwal = 10L
+      )
+    }
+    val createdCustomer = withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllCustomers().first { it.data.any { c -> c.id == customerId } }.data
+        .first { it.id == customerId }
+    }
+
+    val (billId, _) = withTimeout(TIMEOUT_MS) {
+      adminRepo.recordMeterAndCreateBill(
+        customer = createdCustomer,
+        periode = "2026-10",
+        meterAwal = 10L,
+        meterAkhir = 22L,
+        catatan = "Sebelum dihapus"
+      )
+    }
+    val createdBill = withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllBills().first { it.data.any { b -> b.id == billId } }.data
+        .first { it.id == billId }
+    }
+    withTimeout(TIMEOUT_MS) {
+      adminRepo.recordCashPayment(createdBill, "Hendika WP")
+    }
+
+    withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllPayments().first { it.data.any { p -> p.customerId == customerId } }
+    }
+
+    // Delete customer and verify all associated records are gone immediately
+    withTimeout(TIMEOUT_MS) {
+      adminRepo.deleteCustomer(
+        customerId = customerId,
+        ownerUid = custUid,
+        isOnline = true,
+        allowOfflineQueue = false
+      )
+    }
+
+    val remainingCustomers = withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllCustomers().first { snap -> snap.data.none { it.id == customerId } }.data
+    }
+    val remainingReadings = withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllReadings().first { snap -> snap.data.none { it.customerId == customerId } }.data
+    }
+    val remainingBills = withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllBills().first { snap -> snap.data.none { it.customerId == customerId } }.data
+    }
+    val remainingPayments = withTimeout(FLOW_TIMEOUT_MS) {
+      adminRepo.observeAllPayments().first { snap -> snap.data.none { it.customerId == customerId } }.data
+    }
+    val requestSnap = withTimeout(TIMEOUT_MS) {
+      firestore.collection("customer_requests").document(custUid).get().await()
+    }
+
+    assertTrue(remainingCustomers.none { it.id == customerId })
+    assertTrue(remainingReadings.none { it.customerId == customerId })
+    assertTrue(remainingBills.none { it.customerId == customerId })
+    assertTrue(remainingPayments.none { it.customerId == customerId })
+    assertTrue(!requestSnap.exists())
   }
 
   private companion object {

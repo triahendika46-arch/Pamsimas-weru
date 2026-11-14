@@ -19,10 +19,12 @@ import com.google.android.gms.tasks.Task
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.MetadataChanges
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -276,15 +278,73 @@ class PamsimasRepository(
     }
   }
 
+  private suspend fun fetchCustomerDocRefs(
+    collectionPath: String,
+    customerId: String,
+    isOnline: Boolean
+  ): List<DocumentReference> {
+    val query = db.collection(collectionPath).whereEqualTo("customerId", customerId)
+    val snap = if (!isOnline) {
+      try {
+        query.get(Source.CACHE).await()
+      } catch (e: CancellationException) {
+        throw e
+      } catch (_: Exception) {
+        null
+      }
+    } else {
+      try {
+        withTimeoutOrNull(3000L) { query.get().await() } ?: query.get(Source.CACHE).await()
+      } catch (e: CancellationException) {
+        throw e
+      } catch (_: Exception) {
+        try {
+          query.get(Source.CACHE).await()
+        } catch (e2: CancellationException) {
+          throw e2
+        } catch (_: Exception) {
+          null
+        }
+      }
+    }
+    return snap?.documents?.map { it.reference }.orEmpty()
+  }
+
   suspend fun deleteCustomer(
     customerId: String,
+    ownerUid: String = "",
+    isOnline: Boolean = true,
     allowOfflineQueue: Boolean = false
   ): WriteResultStatus {
     requireUserId()
-    val docRef = db.collection("customers").document(customerId)
-    return executeWrite(OperationType.DELETE, docRef.path, allowOfflineQueue) {
-      docRef.delete()
+    require(customerId.isNotBlank()) { "ID pelanggan kosong" }
+
+    val refsToDelete = LinkedHashSet<DocumentReference>()
+    refsToDelete.addAll(fetchCustomerDocRefs("meter_readings", customerId, isOnline))
+    refsToDelete.addAll(fetchCustomerDocRefs("bills", customerId, isOnline))
+    refsToDelete.addAll(fetchCustomerDocRefs("payments", customerId, isOnline))
+
+    val cleanOwnerUid = ownerUid.trim()
+    if (cleanOwnerUid.isNotBlank() && cleanOwnerUid.matches(Regex("^[a-zA-Z0-9_\\-]+$"))) {
+      refsToDelete.add(db.collection("customer_requests").document(cleanOwnerUid))
     }
+
+    val customerDocRef = db.collection("customers").document(customerId)
+    refsToDelete.add(customerDocRef)
+
+    val effectiveOfflineQueue = allowOfflineQueue || !isOnline
+    var finalStatus = WriteResultStatus.SYNCED_ONLINE
+    for (chunk in refsToDelete.toList().chunked(450)) {
+      val batch = db.batch()
+      chunk.forEach { ref -> batch.delete(ref) }
+      val status = executeWrite(OperationType.DELETE, customerDocRef.path, effectiveOfflineQueue) {
+        batch.commit()
+      }
+      if (status == WriteResultStatus.QUEUED_OFFLINE) {
+        finalStatus = WriteResultStatus.QUEUED_OFFLINE
+      }
+    }
+    return finalStatus
   }
 
   suspend fun claimOrUpdateMyProfile(
