@@ -17,6 +17,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
       - name: Siapin file .env
         run: cp .env.example .env || echo "no env example"
+      - name: Bikin debug.keystore
+        run: keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
       - name: Build APK
         run: gradle assembleDebug --stacktrace
       - name: Simpan APK-nya
