@@ -1,0 +1,197 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Pengurus atau admin PAMSIMAS Weru yang memiliki akses penuh.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID admin" },
+        "email": { "type": "string", "description": "Email Google admin" },
+        "nama": { "type": "string", "description": "Nama lengkap admin" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "email", "nama", "createdAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Data pelanggan air bersih PAMSIMAS Dusun Weru.",
+      "type": "object",
+      "properties": {
+        "nama": { "type": "string", "description": "Nama lengkap pelanggan" },
+        "noMeter": { "type": "string", "description": "Nomor meteran air pelanggan" },
+        "alamat": { "type": "string", "description": "Alamat rumah di Dusun Weru" },
+        "rtRw": { "type": "string", "description": "RT/RW pelanggan" },
+        "noHp": { "type": "string", "description": "Nomor telepon/WhatsApp" },
+        "emailPelanggan": { "type": "string", "description": "Email Google pelanggan (huruf kecil)" },
+        "ownerUid": { "type": "string", "description": "UID akun Google pelanggan atau kosong jika belum ditautkan" },
+        "aktif": { "type": "boolean", "description": "Status sambungan aktif" },
+        "meterTerakhir": { "type": "integer", "description": "Angka meteran akhir terakhir (m3)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["nama", "noMeter", "alamat", "rtRw", "noHp", "emailPelanggan", "ownerUid", "aktif", "meterTerakhir", "createdAt", "updatedAt"]
+    },
+    "CustomerRequest": {
+      "title": "CustomerRequest",
+      "description": "Permintaan aktivasi atau penautan akun pelanggan ke data pelanggan.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "UID pengaju" },
+        "email": { "type": "string", "description": "Email Google pengaju" },
+        "nama": { "type": "string", "description": "Nama lengkap pengaju" },
+        "noMeter": { "type": "string", "description": "Perkiraan nomor meter jika ada" },
+        "alamat": { "type": "string", "description": "Alamat Dusun Weru" },
+        "rtRw": { "type": "string", "description": "RT/RW" },
+        "noHp": { "type": "string", "description": "Nomor HP/WA" },
+        "status": { "type": "string", "enum": ["menunggu", "disetujui", "ditolak"] },
+        "catatanAdmin": { "type": "string", "description": "Catatan admin" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "nama", "noMeter", "alamat", "rtRw", "noHp", "status", "catatanAdmin", "createdAt", "updatedAt"]
+    },
+    "MeterReading": {
+      "title": "MeterReading",
+      "description": "Pencatatan angka meteran air bulanan pelanggan.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerNama": { "type": "string" },
+        "noMeter": { "type": "string" },
+        "customerOwnerUid": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "periode": { "type": "string", "description": "Format YYYY-MM" },
+        "meterAwal": { "type": "integer" },
+        "meterAkhir": { "type": "integer" },
+        "pemakaian": { "type": "integer" },
+        "catatan": { "type": "string" },
+        "dicatatOlehUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "customerNama", "noMeter", "customerOwnerUid", "customerEmail", "periode", "meterAwal", "meterAkhir", "pemakaian", "catatan", "dicatatOlehUid", "createdAt", "updatedAt"]
+    },
+    "Bill": {
+      "title": "Bill",
+      "description": "Tagihan air bulanan dengan tarif Rp2.000/m3 dan beban Rp5.000 jika pemakaian < 8 m3.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerNama": { "type": "string" },
+        "noMeter": { "type": "string" },
+        "rtRw": { "type": "string" },
+        "customerOwnerUid": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "readingId": { "type": "string" },
+        "periode": { "type": "string" },
+        "meterAwal": { "type": "integer" },
+        "meterAkhir": { "type": "integer" },
+        "pemakaian": { "type": "integer" },
+        "tarifPerM3": { "type": "integer" },
+        "biayaPemakaian": { "type": "integer" },
+        "biayaBeban": { "type": "integer" },
+        "totalTagihan": { "type": "integer" },
+        "status": { "type": "string", "enum": ["belum_bayar", "menunggu_verifikasi", "lunas", "ditolak"] },
+        "metodePembayaran": { "type": "string", "enum": ["", "tunai", "transfer"] },
+        "namaPengirimTransfer": { "type": "string" },
+        "bankPengirim": { "type": "string" },
+        "catatanTransfer": { "type": "string" },
+        "proofImageBase64": { "type": "string" },
+        "alasanPenolakan": { "type": "string" },
+        "nomorKuitansi": { "type": "string" },
+        "dibayarPada": { "type": "string", "format": "date-time" },
+        "diverifikasiOleh": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "customerId", "customerNama", "noMeter", "rtRw", "customerOwnerUid", "customerEmail",
+        "readingId", "periode", "meterAwal", "meterAkhir", "pemakaian",
+        "tarifPerM3", "biayaPemakaian", "biayaBeban", "totalTagihan",
+        "status", "metodePembayaran", "namaPengirimTransfer", "bankPengirim",
+        "catatanTransfer", "proofImageBase64", "alasanPenolakan", "nomorKuitansi",
+        "diverifikasiOleh", "createdAt", "updatedAt"
+      ]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Catatan transaksi pembayaran tunai maupun transfer dan referensi kuitansi.",
+      "type": "object",
+      "properties": {
+        "billId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerNama": { "type": "string" },
+        "noMeter": { "type": "string" },
+        "customerOwnerUid": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "periode": { "type": "string" },
+        "pemakaian": { "type": "integer" },
+        "meterAwal": { "type": "integer" },
+        "meterAkhir": { "type": "integer" },
+        "biayaPemakaian": { "type": "integer" },
+        "biayaBeban": { "type": "integer" },
+        "jumlahBayar": { "type": "integer" },
+        "metode": { "type": "string", "enum": ["tunai", "transfer"] },
+        "status": { "type": "string", "enum": ["menunggu_verifikasi", "lunas", "ditolak"] },
+        "nomorKuitansi": { "type": "string" },
+        "namaPengirim": { "type": "string" },
+        "bankPengirim": { "type": "string" },
+        "catatan": { "type": "string" },
+        "proofImageBase64": { "type": "string" },
+        "diverifikasiOleh": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "billId", "customerId", "customerNama", "noMeter", "customerOwnerUid", "customerEmail",
+        "periode", "pemakaian", "meterAwal", "meterAkhir", "biayaPemakaian", "biayaBeban",
+        "jumlahBayar", "metode", "status", "nomorKuitansi", "namaPengirim", "bankPengirim",
+        "catatan", "proofImageBase64", "diverifikasiOleh", "createdAt", "updatedAt"
+      ]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Pengaturan rekening transfer dan info resmi PAMSIMAS Weru.",
+      "type": "object",
+      "properties": {
+        "namaBank": { "type": "string" },
+        "nomorRekening": { "type": "string" },
+        "atasNama": { "type": "string" },
+        "kontakAdmin": { "type": "string" },
+        "catatanPembayaran": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["namaBank", "nomorRekening", "atasNama", "kontakAdmin", "catatanPembayaran", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Daftar admin PAMSIMAS Weru."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Koleksi master pelanggan Dusun Weru."
+    },
+    "/customer_requests/{uid}": {
+      "schema": { "$ref": "#/entities/CustomerRequest" },
+      "description": "Permintaan aktivasi/tautan akun pelanggan."
+    },
+    "/meter_readings/{readingId}": {
+      "schema": { "$ref": "#/entities/MeterReading" },
+      "description": "Riwayat pencatatan meteran bulanan."
+    },
+    "/bills/{billId}": {
+      "schema": { "$ref": "#/entities/Bill" },
+      "description": "Tagihan air bulanan dan bukti transfer."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Riwayat pembayaran dan kuitansi resmi."
+    },
+    "/app_config/{configId}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Konfigurasi info rekening dan kontak pengelola."
+    }
+  }
+}

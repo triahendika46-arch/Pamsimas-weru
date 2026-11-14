@@ -1,0 +1,377 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (
+          request.auth.token.email_verified == true &&
+          request.auth.token.email == 'tria.hendika46@admin.smp.belajar.id'
+        )
+      );
+    }
+
+    function isCustomerRecordOwner(data) {
+      return isSignedIn() && (
+        data.customerOwnerUid == request.auth.uid ||
+        (
+          request.auth.token.email_verified == true &&
+          data.customerEmail == request.auth.token.email
+        )
+      );
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // --- Entity Validation Helpers ---
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'nama', 'createdAt']) &&
+             data.keys().hasOnly(['uid', 'email', 'nama', 'createdAt']) &&
+             data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.nama is string && data.nama.size() >= 2 && data.nama.size() <= 80 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll([
+               'nama', 'noMeter', 'alamat', 'rtRw', 'noHp',
+               'emailPelanggan', 'ownerUid', 'aktif', 'meterTerakhir',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'nama', 'noMeter', 'alamat', 'rtRw', 'noHp',
+               'emailPelanggan', 'ownerUid', 'aktif', 'meterTerakhir',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.nama is string && data.nama.size() >= 2 && data.nama.size() <= 80 &&
+             data.noMeter is string && data.noMeter.size() >= 2 && data.noMeter.size() <= 30 &&
+             data.alamat is string && data.alamat.size() <= 200 &&
+             data.rtRw is string && data.rtRw.size() <= 30 &&
+             data.noHp is string && data.noHp.size() <= 25 &&
+             data.emailPelanggan is string && data.emailPelanggan.size() <= 120 &&
+             data.ownerUid is string && data.ownerUid.size() <= 128 &&
+             data.aktif is bool &&
+             data.meterTerakhir is int && data.meterTerakhir >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCustomerRequest(data) {
+      return data.keys().hasAll([
+               'uid', 'email', 'nama', 'noMeter', 'alamat',
+               'rtRw', 'noHp', 'status', 'catatanAdmin',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'uid', 'email', 'nama', 'noMeter', 'alamat',
+               'rtRw', 'noHp', 'status', 'catatanAdmin',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 120 &&
+             data.nama is string && data.nama.size() >= 2 && data.nama.size() <= 80 &&
+             data.noMeter is string && data.noMeter.size() <= 30 &&
+             data.alamat is string && data.alamat.size() <= 200 &&
+             data.rtRw is string && data.rtRw.size() <= 30 &&
+             data.noHp is string && data.noHp.size() <= 25 &&
+             data.status in ['menunggu', 'disetujui', 'ditolak'] &&
+             data.catatanAdmin is string && data.catatanAdmin.size() <= 200 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMeterReading(data) {
+      return data.keys().hasAll([
+               'customerId', 'customerNama', 'noMeter', 'customerOwnerUid', 'customerEmail',
+               'periode', 'meterAwal', 'meterAkhir', 'pemakaian', 'catatan',
+               'dicatatOlehUid', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'customerId', 'customerNama', 'noMeter', 'customerOwnerUid', 'customerEmail',
+               'periode', 'meterAwal', 'meterAkhir', 'pemakaian', 'catatan',
+               'dicatatOlehUid', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.customerId) &&
+             data.customerNama is string && data.customerNama.size() >= 2 && data.customerNama.size() <= 80 &&
+             data.noMeter is string && data.noMeter.size() >= 2 && data.noMeter.size() <= 30 &&
+             data.customerOwnerUid is string && data.customerOwnerUid.size() <= 128 &&
+             data.customerEmail is string && data.customerEmail.size() <= 120 &&
+             data.periode is string && data.periode.matches('^\\d{4}-\\d{2}$') &&
+             data.meterAwal is int && data.meterAwal >= 0 &&
+             data.meterAkhir is int && data.meterAkhir >= data.meterAwal &&
+             data.pemakaian is int && data.pemakaian == (data.meterAkhir - data.meterAwal) &&
+             data.catatan is string && data.catatan.size() <= 200 &&
+             data.dicatatOlehUid is string && data.dicatatOlehUid.size() >= 1 && data.dicatatOlehUid.size() <= 128 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidBill(data) {
+      return data.keys().hasAll([
+               'customerId', 'customerNama', 'noMeter', 'rtRw', 'customerOwnerUid', 'customerEmail',
+               'readingId', 'periode', 'meterAwal', 'meterAkhir', 'pemakaian',
+               'tarifPerM3', 'biayaPemakaian', 'biayaBeban', 'totalTagihan',
+               'status', 'metodePembayaran', 'namaPengirimTransfer', 'bankPengirim',
+               'catatanTransfer', 'proofImageBase64', 'alasanPenolakan', 'nomorKuitansi',
+               'diverifikasiOleh', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'customerId', 'customerNama', 'noMeter', 'rtRw', 'customerOwnerUid', 'customerEmail',
+               'readingId', 'periode', 'meterAwal', 'meterAkhir', 'pemakaian',
+               'tarifPerM3', 'biayaPemakaian', 'biayaBeban', 'totalTagihan',
+               'status', 'metodePembayaran', 'namaPengirimTransfer', 'bankPengirim',
+               'catatanTransfer', 'proofImageBase64', 'alasanPenolakan', 'nomorKuitansi',
+               'dibayarPada', 'diverifikasiOleh', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.customerId) &&
+             data.customerNama is string && data.customerNama.size() >= 2 && data.customerNama.size() <= 80 &&
+             data.noMeter is string && data.noMeter.size() >= 2 && data.noMeter.size() <= 30 &&
+             data.rtRw is string && data.rtRw.size() <= 30 &&
+             data.customerOwnerUid is string && data.customerOwnerUid.size() <= 128 &&
+             data.customerEmail is string && data.customerEmail.size() <= 120 &&
+             isValidId(data.readingId) &&
+             data.periode is string && data.periode.matches('^\\d{4}-\\d{2}$') &&
+             data.meterAwal is int && data.meterAwal >= 0 &&
+             data.meterAkhir is int && data.meterAkhir >= data.meterAwal &&
+             data.pemakaian is int && data.pemakaian == (data.meterAkhir - data.meterAwal) &&
+             data.tarifPerM3 is int && data.tarifPerM3 == 2000 &&
+             data.biayaPemakaian is int && data.biayaPemakaian == (data.pemakaian * 2000) &&
+             data.biayaBeban is int && data.biayaBeban == (data.pemakaian < 8 ? 5000 : 0) &&
+             data.totalTagihan is int && data.totalTagihan == (data.biayaPemakaian + data.biayaBeban) &&
+             data.status in ['belum_bayar', 'menunggu_verifikasi', 'lunas', 'ditolak'] &&
+             data.metodePembayaran in ['', 'tunai', 'transfer'] &&
+             data.namaPengirimTransfer is string && data.namaPengirimTransfer.size() <= 80 &&
+             data.bankPengirim is string && data.bankPengirim.size() <= 50 &&
+             data.catatanTransfer is string && data.catatanTransfer.size() <= 200 &&
+             data.proofImageBase64 is string && data.proofImageBase64.size() <= 350000 &&
+             data.alasanPenolakan is string && data.alasanPenolakan.size() <= 200 &&
+             data.nomorKuitansi is string && data.nomorKuitansi.size() <= 40 &&
+             (!('dibayarPada' in data) || data.dibayarPada == null || isValidTimestamp(data.dibayarPada)) &&
+             data.diverifikasiOleh is string && data.diverifikasiOleh.size() <= 80 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll([
+               'billId', 'customerId', 'customerNama', 'noMeter', 'customerOwnerUid', 'customerEmail',
+               'periode', 'pemakaian', 'meterAwal', 'meterAkhir',
+               'biayaPemakaian', 'biayaBeban', 'jumlahBayar',
+               'metode', 'status', 'nomorKuitansi', 'namaPengirim', 'bankPengirim',
+               'catatan', 'proofImageBase64', 'diverifikasiOleh', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'billId', 'customerId', 'customerNama', 'noMeter', 'customerOwnerUid', 'customerEmail',
+               'periode', 'pemakaian', 'meterAwal', 'meterAkhir',
+               'biayaPemakaian', 'biayaBeban', 'jumlahBayar',
+               'metode', 'status', 'nomorKuitansi', 'namaPengirim', 'bankPengirim',
+               'catatan', 'proofImageBase64', 'diverifikasiOleh', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.billId) &&
+             isValidId(data.customerId) &&
+             data.customerNama is string && data.customerNama.size() >= 2 && data.customerNama.size() <= 80 &&
+             data.noMeter is string && data.noMeter.size() >= 2 && data.noMeter.size() <= 30 &&
+             data.customerOwnerUid is string && data.customerOwnerUid.size() <= 128 &&
+             data.customerEmail is string && data.customerEmail.size() <= 120 &&
+             data.periode is string && data.periode.matches('^\\d{4}-\\d{2}$') &&
+             data.pemakaian is int && data.pemakaian >= 0 &&
+             data.meterAwal is int && data.meterAwal >= 0 &&
+             data.meterAkhir is int && data.meterAkhir >= data.meterAwal &&
+             data.biayaPemakaian is int && data.biayaPemakaian >= 0 &&
+             data.biayaBeban is int && data.biayaBeban >= 0 &&
+             data.jumlahBayar is int && data.jumlahBayar == (data.biayaPemakaian + data.biayaBeban) &&
+             data.metode in ['tunai', 'transfer'] &&
+             data.status in ['menunggu_verifikasi', 'lunas', 'ditolak'] &&
+             data.nomorKuitansi is string && data.nomorKuitansi.size() <= 40 &&
+             data.namaPengirim is string && data.namaPengirim.size() <= 80 &&
+             data.bankPengirim is string && data.bankPengirim.size() <= 50 &&
+             data.catatan is string && data.catatan.size() <= 200 &&
+             data.proofImageBase64 is string && data.proofImageBase64.size() <= 350000 &&
+             data.diverifikasiOleh is string && data.diverifikasiOleh.size() <= 80 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAppConfig(data) {
+      return data.keys().hasAll([
+               'namaBank', 'nomorRekening', 'atasNama', 'kontakAdmin', 'catatanPembayaran', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'namaBank', 'nomorRekening', 'atasNama', 'kontakAdmin', 'catatanPembayaran', 'updatedAt'
+             ]) &&
+             data.namaBank is string && data.namaBank.size() <= 60 &&
+             data.nomorRekening is string && data.nomorRekening.size() <= 40 &&
+             data.atasNama is string && data.atasNama.size() <= 80 &&
+             data.kontakAdmin is string && data.kontakAdmin.size() <= 40 &&
+             data.catatanPembayaran is string && data.catatanPembayaran.size() <= 250 &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Admins
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(uid) && isValidAdminUser(incoming()) && incoming().uid == uid;
+      allow update: if isAdmin() && isValidId(uid) && isValidAdminUser(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(uid);
+    }
+
+    // 2. Customers
+    match /customers/{customerId} {
+      allow get: if isValidId(customerId) && (
+        isAdmin() ||
+        (isSignedIn() && (
+          existing().ownerUid == request.auth.uid ||
+          (request.auth.token.email_verified == true && existing().emailPelanggan == request.auth.token.email)
+        ))
+      );
+      allow list: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.ownerUid == request.auth.uid ||
+          (request.auth.token.email_verified == true && resource.data.emailPelanggan == request.auth.token.email)
+        )
+      );
+      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming());
+      allow update: if isValidId(customerId) && isValidCustomer(incoming()) &&
+                       incoming().createdAt == existing().createdAt && (
+        isAdmin() ||
+        (
+          isSignedIn() && (
+            // Customer claiming an unlinked record that matches their verified email
+            (
+              existing().ownerUid == '' &&
+              request.auth.token.email_verified == true &&
+              existing().emailPelanggan == request.auth.token.email &&
+              incoming().ownerUid == request.auth.uid &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'noHp', 'alamat', 'updatedAt'])
+            ) ||
+            // Already linked customer updating their contact details only
+            (
+              existing().ownerUid == request.auth.uid &&
+              incoming().ownerUid == existing().ownerUid &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['noHp', 'alamat', 'updatedAt'])
+            )
+          )
+        )
+      );
+      allow delete: if isAdmin() && isValidId(customerId);
+    }
+
+    // 3. Customer Activation Requests
+    match /customer_requests/{uid} {
+      allow get: if isValidId(uid) && (isAdmin() || (isSignedIn() && request.auth.uid == uid));
+      allow list: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(uid) && request.auth.uid == uid &&
+                       isValidCustomerRequest(incoming()) &&
+                       incoming().uid == request.auth.uid &&
+                       incoming().status == 'menunggu';
+      allow update: if isValidId(uid) && isValidCustomerRequest(incoming()) &&
+                       incoming().uid == existing().uid &&
+                       incoming().createdAt == existing().createdAt && (
+        isAdmin() ||
+        (
+          isSignedIn() && request.auth.uid == uid &&
+          existing().status != 'disetujui' &&
+          incoming().status == 'menunggu' &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['nama', 'noMeter', 'alamat', 'rtRw', 'noHp', 'status', 'updatedAt'])
+        )
+      );
+      allow delete: if isValidId(uid) && (isAdmin() || (isSignedIn() && request.auth.uid == uid));
+    }
+
+    // 4. Meter Readings
+    match /meter_readings/{readingId} {
+      allow get: if isValidId(readingId) && (isAdmin() || isCustomerRecordOwner(existing()));
+      allow list: if isAdmin() || isCustomerRecordOwner(resource.data);
+      allow create: if isAdmin() && isValidId(readingId) && isValidMeterReading(incoming()) &&
+                       exists(/databases/$(database)/documents/customers/$(incoming().customerId));
+      allow update: if isAdmin() && isValidId(readingId) && isValidMeterReading(incoming()) &&
+                       incoming().customerId == existing().customerId &&
+                       incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(readingId);
+    }
+
+    // 5. Bills
+    match /bills/{billId} {
+      allow get: if isValidId(billId) && (isAdmin() || isCustomerRecordOwner(existing()));
+      allow list: if isAdmin() || isCustomerRecordOwner(resource.data);
+      allow create: if isAdmin() && isValidId(billId) && isValidBill(incoming()) &&
+                       exists(/databases/$(database)/documents/customers/$(incoming().customerId));
+      allow update: if isValidId(billId) && isValidBill(incoming()) &&
+                       incoming().customerId == existing().customerId &&
+                       incoming().readingId == existing().readingId &&
+                       incoming().createdAt == existing().createdAt && (
+        isAdmin() ||
+        (
+          // Customer can only submit transfer proof when bill is not yet 'lunas'
+          isCustomerRecordOwner(existing()) &&
+          existing().status != 'lunas' &&
+          incoming().status == 'menunggu_verifikasi' &&
+          incoming().metodePembayaran == 'transfer' &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'status', 'metodePembayaran', 'namaPengirimTransfer', 'bankPengirim',
+            'catatanTransfer', 'proofImageBase64', 'alasanPenolakan', 'updatedAt'
+          ])
+        )
+      );
+      allow delete: if isAdmin() && isValidId(billId);
+    }
+
+    // 6. Payments (History & Receipts)
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && (isAdmin() || isCustomerRecordOwner(existing()));
+      allow list: if isAdmin() || isCustomerRecordOwner(resource.data);
+      allow create: if isValidId(paymentId) && isValidPayment(incoming()) &&
+                       exists(/databases/$(database)/documents/bills/$(incoming().billId)) && (
+        isAdmin() ||
+        (
+          isCustomerRecordOwner(incoming()) &&
+          incoming().metode == 'transfer' &&
+          incoming().status == 'menunggu_verifikasi' &&
+          incoming().nomorKuitansi == '' &&
+          incoming().diverifikasiOleh == ''
+        )
+      );
+      allow update: if isAdmin() && isValidId(paymentId) && isValidPayment(incoming()) &&
+                       incoming().billId == existing().billId &&
+                       incoming().customerId == existing().customerId &&
+                       incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(paymentId);
+    }
+
+    // 7. App Config (Bank details & village info)
+    match /app_config/{configId} {
+      allow get: if isSignedIn() && configId == 'pamsimas';
+      allow list: if false;
+      allow create, update: if isAdmin() && configId == 'pamsimas' && isValidAppConfig(incoming());
+      allow delete: if false;
+    }
+  }
+}

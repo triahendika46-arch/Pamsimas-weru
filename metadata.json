@@ -1,0 +1,6 @@
+{
+  "name": "Pamsimas Weru",
+  "description": "Aplikasi pengelolaan air bersih Dusun Weru (PAMSIMAS WERU BY HENDIKA WP) dengan akses terpisah Admin dan Pelanggan, dukungan offline dan sinkronisasi Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
