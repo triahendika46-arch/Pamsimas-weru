@@ -87,6 +87,8 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Co
 import com.google.firebase.Firebase
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
@@ -217,7 +219,6 @@ fun AuthScreen(
 
               Spacer(modifier = Modifier.height(14.dp))
 
-              // === EMAIL ===
               OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
@@ -229,7 +230,6 @@ fun AuthScreen(
               )
               Spacer(modifier = Modifier.height(10.dp))
 
-              // === PASSWORD ===
               OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -267,7 +267,6 @@ fun AuthScreen(
 
               Spacer(modifier = Modifier.height(14.dp))
 
-              // === TOMBOL LOGIN / DAFTAR EMAIL ===
               Button(
                 onClick = {
                   errorMessage = null
@@ -288,7 +287,7 @@ fun AuthScreen(
                         Firebase.auth.signInWithEmailAndPassword(email.trim(), password).await()
                       }
                       isLoading = false
-                      onAuthSuccess()
+                      ensureUserDocAndLogin(onAuthSuccess)
                     } catch (e: Exception) {
                       isLoading = false
                       errorMessage = when {
@@ -324,14 +323,12 @@ fun AuthScreen(
                 Text(if (isRegisterMode) "Sudah punya akun? Masuk" else "Belum punya akun? Daftar di sini")
               }
 
-              // === PEMISAH ===
               Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                 Box(modifier = Modifier.weight(1f).height(1.dp).background(Color.Gray.copy(alpha = 0.3f)))
                 Text("  ATAU  ", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 Box(modifier = Modifier.weight(1f).height(1.dp).background(Color.Gray.copy(alpha = 0.3f)))
               }
 
-              // === TOMBOL GOOGLE (TETAP ADA) ===
               Button(
                 onClick = {
                   errorMessage = null
@@ -450,7 +447,7 @@ fun attemptAutoSignIn(
   scope: CoroutineScope
 ) {
   if (Firebase.auth.currentUser != null) {
-    onAuthSuccess()
+    scope.launch { ensureUserDocAndLogin(onAuthSuccess) }
     return
   }
   val clientId = try {
@@ -473,7 +470,7 @@ fun attemptAutoSignIn(
         val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
         val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
         Firebase.auth.signInWithCredential(authCredential).await()
-        onAuthSuccess()
+        ensureUserDocAndLogin(onAuthSuccess)
       } else {
         onUnauthenticated()
       }
@@ -508,7 +505,7 @@ fun onGoogleSignInClicked(
         val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
         val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
         Firebase.auth.signInWithCredential(authCredential).await()
-        onAuthSuccess()
+        ensureUserDocAndLogin(onAuthSuccess)
       } else {
         onAuthError("Tipe kredensial tidak dikenali.")
       }
@@ -539,4 +536,24 @@ fun signOutFromApp(
       }
     }
   }
+}
+
+suspend fun ensureUserDocAndLogin(onAuthSuccess: () -> Unit) {
+    val user = Firebase.auth.currentUser ?: return
+    val db = FirebaseFirestore.getInstance()
+    val uid = user.uid
+    val email = user.email ?: ""
+    try {
+        val adminDoc = db.collection("admins").document(uid).get().await()
+        if (adminDoc.exists()) { onAuthSuccess(); return }
+        val userDoc = db.collection("users").document(uid).get().await()
+        if (userDoc.exists()) { onAuthSuccess(); return }
+        val isMyAdmin = email.equals("triahendika46@gmail.com", ignoreCase = true)
+        if (isMyAdmin) {
+            db.collection("admins").document(uid).set(mapOf("email" to email, "role" to "admin", "createdAt" to System.currentTimeMillis())).await()
+        } else {
+            db.collection("users").document(uid).set(mapOf("email" to email, "role" to "customer", "createdAt" to System.currentTimeMillis()), SetOptions.merge()).await()
+        }
+        onAuthSuccess()
+    } catch (e: Exception) { onAuthSuccess() }
 }
