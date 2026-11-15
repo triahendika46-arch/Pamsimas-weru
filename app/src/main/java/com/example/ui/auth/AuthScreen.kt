@@ -548,7 +548,7 @@ suspend fun ensureUserDocAndLogin(onAuthSuccess: () -> Unit) {
         if (adminDoc.exists()) { onAuthSuccess(); return }
         val userDoc = db.collection("users").document(uid).get().await()
         if (userDoc.exists()) { onAuthSuccess(); return }
-        val isMyAdmin = email.equals("triahendika46@gmail.com", ignoreCase = true)
+        val isMyAdmin = email.equals("tria.hendika46@admin.smp.belajar.id", ignoreCase = true) || email.equals("triahendika46@gmail.com", ignoreCase = true)
         if (isMyAdmin) {
             db.collection("admins").document(uid).set(mapOf("email" to email, "role" to "admin", "createdAt" to System.currentTimeMillis())).await()
         } else {
